@@ -1,91 +1,138 @@
-// Express app
-const express = require('express');
+// ======================
+//  Import Dependencies
+// ======================
+const express = require("express");
+const cors = require("cors");
+const dotenv = require("dotenv");
+const multer = require("multer");
+const { MongoClient, ServerApiVersion } = require("mongodb");
+
+// ======================
+//  Load .env variables
+// ======================
+dotenv.config();
+const port = process.env.PORT || 5000;
+
+// ======================
+//  Express App
+// ======================
 const app = express();
-const cors = require('cors');
+app.use(express.json());
+app.use(cors());
 
-// Load environment variables
-require('dotenv').config()
+// ======================
+//  Multer (File Upload)
+// ======================
+// Images will be saved in "uploads" folder
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "uploads/");
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + "-" + file.originalname);
+  },
+});
+const upload = multer({ storage });
 
-
-const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-const port = process.env.PORT || 5000
-
-
-app.use(express.json())
-app.use(cors())
-
+// ======================
+//  MongoDB Connection
+// ======================
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.cvrlul4.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 const client = new MongoClient(uri, {
-    serverApi: {
-        version: ServerApiVersion.v1,
-        strict: true,
-        deprecationErrors: true,
-    }
+  serverApi: {
+    version: ServerApiVersion.v1,
+    strict: true,
+    deprecationErrors: true,
+  },
 });
 
+// Collections
+let productsCollection;
 
-
-let db
-
+// ======================
+//  Run Function
+// ======================
 async function run() {
-    try {
-        await client.connect()
-        db = client.db(DB_NAME)
-        console.log("Connected to MongoDB:", DB_NAME)
+  try {
+    // ✅ Connect to MongoDB
+    await client.connect();
+    const db = client.db(process.env.DB_NAME);
+    productsCollection = db.collection("products");
 
+    console.log("✅ Connected to MongoDB:", process.env.DB_NAME);
 
+    // ======================
+    //  Routes
+    // ======================
 
-        // POST /products → add product
-        app.post("/products", upload.single("image"), async (req, res) => {
-            try {
-                const collection = db.collection("products") // collection name remains "products"
-                const { name, price, description } = req.body
-                const image = req.file ? req.file.filename : null
+    // Root route
+    app.get("/", (req, res) => {
+      res.send("🚀 NextShop API is running!");
+    });
 
-                const newProduct = { name, price: parseFloat(price), description, image }
-                await collection.insertOne(newProduct)
+    // Health check / Ping
+    app.get("/ping", async (req, res) => {
+      try {
+        await db.command({ ping: 1 });
+        res.send("✅ Pinged MongoDB successfully!");
+      } catch (err) {
+        res.status(500).send("❌ MongoDB connection failed");
+      }
+    });
 
-                res.status(201).json({ message: "Product added successfully", product: newProduct })
-            } catch (err) {
-                console.error(err)
-                res.status(500).json({ message: "Failed to add product" })
-            }
-        })
+    // GET /products → fetch all products
+    app.get("/products", async (req, res) => {
+      try {
+        const products = await productsCollection.find({}).toArray();
+        res.status(200).json(products);
+      } catch (err) {
+        console.error("Error fetching products:", err);
+        res.status(500).json({ message: "Failed to fetch products" });
+      }
+    });
 
-        // GET /products → list all products
-        app.get("/products", async (req, res) => {
-            try {
-                const collection = db.collection("products")
-                const products = await collection.find({}).toArray()
-                res.status(200).json(products)
-            } catch (err) {
-                console.error(err)
-                res.status(500).json({ message: "Failed to fetch products" })
-            }
-        })
+    // POST /products → add new product
+    // Supports JSON + file upload
+    app.post("/products", upload.single("image"), async (req, res) => {
+      try {
+        const { name, price, description } = req.body;
 
-        // GET /ping → test connection
-        app.get("/ping", async (req, res) => {
-            try {
-                await db.command({ ping: 1 })
-                res.send("Pinged MongoDB successfully!")
-            } catch (err) {
-                res.status(500).send("MongoDB connection failed")
-            }
-        })
-    } catch (err) {
-        console.error("MongoDB connection error:", err)
-    }
+        // ✅ Validation
+        if (!name || !price) {
+          return res.status(400).json({ message: "Name and price are required" });
+        }
+
+        const newProduct = {
+          name,
+          price: parseFloat(price),
+          description: description || "",
+          image: req.file ? req.file.filename : null, // Save file name
+          createdAt: new Date(),
+        };
+
+        const result = await productsCollection.insertOne(newProduct);
+
+        res.status(201).json({
+          message: "✅ Product added successfully",
+          productId: result.insertedId,
+          product: newProduct,
+        });
+      } catch (err) {
+        console.error("Error adding product:", err);
+        res.status(500).json({ message: "Failed to add product" });
+      }
+    });
+
+    // ======================
+    //  Start Server (only after DB connects)
+    // ======================
+    app.listen(port, () => {
+      console.log(`🚀 Server running on http://localhost:${port}`);
+    });
+  } catch (err) {
+    console.error("MongoDB connection error:", err);
+  }
 }
+
 run().catch(console.dir);
-
-app.get("/", (req, res) => {
-    res.send("NextShop API is running 🚀");
-});
-
-
-// Start server
-app.listen(port, () => {
-    console.log(`Example app listening on port ${port}`)
-})
