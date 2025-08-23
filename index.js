@@ -11,7 +11,7 @@ const { MongoClient } = require("mongodb")
 // Config
 const PORT = process.env.PORT || 5000
 const MONGO_URI = process.env.MONGO_URI
-const DB_NAME = "productDB" // ← updated database name
+const DB_NAME = "NextShop" // ← updated database name
 
 // Express app
 const app = express()
