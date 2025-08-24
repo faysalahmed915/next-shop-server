@@ -96,7 +96,7 @@ async function run() {
     // Supports JSON + file upload
     app.post("/products", upload.single("image"), async (req, res) => {
       try {
-        const { name, price, description } = req.body;
+        const { name, price, image, description } = req.body;
 
         // ✅ Validation
         if (!name || !price) {
@@ -107,7 +107,7 @@ async function run() {
           name,
           price: parseFloat(price),
           description: description || "",
-          image: req.file ? req.file.filename : null, // Save file name
+          image: image || null, // Save file name
           createdAt: new Date(),
         };
 
