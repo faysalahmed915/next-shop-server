@@ -22,29 +22,39 @@ app.use(cors());
 // ======================
 //  MongoDB Connection
 // ======================
-if (!process.env.DB_NAME) {
-  throw new Error("❌ DB_NAME is not set in environment variables");
+if (!process.env.DB_NAME || !process.env.DB_USER || !process.env.DB_PASS) {
+  throw new Error(
+    "❌ Please set DB_NAME, DB_USER, and DB_PASS in your environment variables"
+  );
 }
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.cvrlul4.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
-let client;
+const client = new MongoClient(uri, {
+  serverApi: {
+    version: ServerApiVersion.v1,
+    strict: true,
+    deprecationErrors: true,
+  },
+});
+
 let db;
 let productsCollection;
 
+// ======================
+//  Connect to MongoDB
+// ======================
 async function connectDB() {
-  if (!client) {
-    client = new MongoClient(uri, {
-      serverApi: {
-        version: ServerApiVersion.v1,
-        strict: true,
-        deprecationErrors: true,
-      },
-    });
-    await client.connect();
-    db = client.db(process.env.DB_NAME);
-    productsCollection = db.collection("products");
-    console.log("✅ Connected to MongoDB:", process.env.DB_NAME);
+  if (!db) {
+    try {
+      await client.connect();
+      db = client.db(process.env.DB_NAME);
+      productsCollection = db.collection("products");
+      console.log("✅ Connected to MongoDB:", process.env.DB_NAME);
+    } catch (err) {
+      console.error("❌ MongoDB connection error:", err);
+      process.exit(1); // stop server if DB connection fails
+    }
   }
 }
 
@@ -80,13 +90,13 @@ app.get("/products", async (req, res) => {
   }
 });
 
-// POST /products → add new product (using image URL instead of multer)
+// POST /products → add new product
+// Uses image URL (safe for Vercel)
 app.post("/products", async (req, res) => {
   try {
     await connectDB();
     const { name, price, description, image } = req.body;
 
-    // ✅ Validation
     if (!name || !price) {
       return res.status(400).json({ message: "Name and price are required" });
     }
@@ -95,7 +105,7 @@ app.post("/products", async (req, res) => {
       name,
       price: parseFloat(price),
       description: description || "",
-      image: image || null, // Save image URL (better for Vercel)
+      image: image || null, // store image URL
       createdAt: new Date(),
     };
 
