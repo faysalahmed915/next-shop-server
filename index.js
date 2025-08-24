@@ -57,7 +57,7 @@ async function run() {
   try {
     // ✅ Connect to MongoDB
     await client.connect();
-    const db = client.db(process.env.DB_NAME);
+    const db = client.db('NextShop');
     productsCollection = db.collection("products");
 
     console.log("✅ Connected to MongoDB:", process.env.DB_NAME);
